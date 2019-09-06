@@ -29,10 +29,10 @@ from superset import appbuilder, get_feature_flags, security_manager
 from superset.models.sql_lab import Query, SavedQuery
 from superset.utils import core as utils
 
-from .base import BaseSupersetView, DeleteMixin, SupersetFilter, SupersetModelView
+from .base import BaseFilter, BaseSupersetView, DeleteMixin, SupersetModelView
 
 
-class QueryFilter(SupersetFilter):
+class QueryFilter(BaseFilter):
     def apply(self, query: BaseQuery, func: Callable) -> BaseQuery:
         """
         Filter queries to only those owned by current user if

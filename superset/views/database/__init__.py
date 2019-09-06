@@ -21,14 +21,14 @@ from typing import Type
 from flask import Markup
 from flask_babel import lazy_gettext as _
 from marshmallow import ValidationError
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, or_
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
 
 from superset import security_manager
 from superset.exceptions import SupersetException
 from superset.utils import core as utils
-from superset.views.base import SupersetFilter
+from superset.views.base import BaseFilter
 
 
 def sqlalchemy_uri_validator(
@@ -49,12 +49,27 @@ def sqlalchemy_uri_validator(
         )
 
 
-class DatabaseFilter(SupersetFilter):
-    def apply(self, query, func):
+class DatabaseFilter(BaseFilter):
+    # TODO(bogdan): consider caching.
+    def get_databases_from_schema_access(self):
+        found_databases = set()
+        for vm in security_manager.user_view_menu_names("schema_access"):
+            database_name, _ = security_manager.unpack_schema_perm(vm)
+            found_databases.add(database_name)
+        return found_databases
+
+    def apply(self, query, func):  # noqa
         if security_manager.all_database_access():
             return query
-        perms = self.get_view_menus("database_access")
-        return query.filter(self.model.perm.in_(perms))
+        database_perms = security_manager.user_view_menu_names("database_access")
+        # TODO(bogdan): consider adding datasource access here as well.
+        schema_access_databases = self.get_databases_from_schema_access()
+        return query.filter(
+            or_(
+                self.model.perm.in_(database_perms),
+                self.model.database_name.in_(schema_access_databases),
+            )
+        )
 
 
 class DatabaseMixin:

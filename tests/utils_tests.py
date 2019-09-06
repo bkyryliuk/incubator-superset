@@ -869,9 +869,7 @@ class UtilsTestCase(unittest.TestCase):
         self.assertIsNotNone(database)
         self.assertEqual(database.sqlalchemy_uri, "sqlite:///superset.db")
         self.assertIsNotNone(
-            security_manager.find_permission_view_menu(
-                "datasource_access", database.perm
-            )
+            security_manager.find_permission_view_menu("database_access", database.perm)
         )
         # Test change URI
         get_or_create_db("test_db", "sqlite:///changed.db")
