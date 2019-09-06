@@ -514,8 +514,7 @@ class DruidDatasource(Model, BaseDatasource):
         else:
             return None
 
-    @property
-    def schema_perm(self):
+    def get_schema_perm(self):
         """Returns schema permission if present, cluster one otherwise."""
         return security_manager.get_schema_perm(self.cluster, self.schema)
 

@@ -228,8 +228,10 @@ class SliceFilter(SupersetFilter):
         if security_manager.all_datasource_access():
             return query
         perms = self.get_view_menus("datasource_access")
-        # TODO(bogdan): add `schema_access` support here
-        return query.filter(self.model.perm.in_(perms))
+        schema_perms = self.get_view_menus("schema_access")
+        return query.filter(
+            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms))
+        )
 
 
 class DashboardFilter(SupersetFilter):
@@ -255,6 +257,7 @@ class DashboardFilter(SupersetFilter):
             return query
 
         datasource_perms = self.get_view_menus("datasource_access")
+        schema_perms = self.get_view_menus("schema_access")
         all_datasource_access = security_manager.all_datasource_access()
         published_dash_query = (
             db.session.query(Dash.id)
@@ -262,7 +265,11 @@ class DashboardFilter(SupersetFilter):
             .filter(
                 and_(
                     Dash.published == True,  # noqa
-                    or_(Slice.perm.in_(datasource_perms), all_datasource_access),
+                    or_(
+                        Slice.perm.in_(datasource_perms),
+                        Slice.schema_perm.in_(schema_perms),
+                        all_datasource_access,
+                    ),
                 )
             )
         )

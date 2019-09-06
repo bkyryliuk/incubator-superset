@@ -15,9 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 import inspect
+import prison
 import unittest
 
-from superset import app, appbuilder, security_manager
+from superset import app, appbuilder, db, security_manager
+from superset.connectors.sqla.models import SqlaTable
+from superset.models.core import Database, Slice
 from .base_tests import SupersetTestCase
 
 
@@ -28,8 +31,115 @@ def get_perm_tuples(role_name):
     return perm_set
 
 
+SCHEMA_ACCESS_ROLE = "schema_access_role"
+
+
 class RolePermissionTests(SupersetTestCase):
-    """Testing export import functionality for dashboards"""
+    """Testing export role permissions."""
+
+    @classmethod
+    def setUpClass(cls):
+        session = db.session
+        security_manager.add_role(SCHEMA_ACCESS_ROLE)
+        session.commit()
+
+        ds = (
+            db.session.query(SqlaTable)
+            .filter_by(table_name="wb_health_population")
+            .first()
+        )
+        ds.schema = "temp_schema"
+        ds.schema_perm = ds.get_schema_perm()
+
+        ds_slices = (
+            session.query(Slice)
+            .filter_by(datasource_type="table")
+            .filter_by(datasource_id=ds.id)
+            .all()
+        )
+        for s in ds_slices:
+            s.schema_perm = ds.schema_perm
+
+        security_manager.add_permission_view_menu("schema_access", ds.schema_perm)
+        schema_perm_view = security_manager.find_permission_view_menu(
+            "schema_access", ds.schema_perm
+        )
+        security_manager.add_permission_role(
+            security_manager.find_role(SCHEMA_ACCESS_ROLE), schema_perm_view
+        )
+        gamma_user = security_manager.find_user(username="gamma")
+        gamma_user.roles.append(security_manager.find_role(SCHEMA_ACCESS_ROLE))
+        session.commit()
+
+    @classmethod
+    def tearDownClass(cls):
+        session = db.session
+        ds = (
+            session.query(SqlaTable)
+            .filter_by(table_name="wb_health_population")
+            .first()
+        )
+        ds.schema = None
+        ds_slices = (
+            session.query(Slice)
+            .filter_by(datasource_type="table")
+            .filter_by(datasource_id=ds.id)
+            .all()
+        )
+        for s in ds_slices:
+            s.schema_perm = None
+        session.delete(security_manager.find_role(SCHEMA_ACCESS_ROLE))
+        session.commit()
+
+    def test_gamma_user_schema_access_to_dashboards(self):
+        self.login(username="gamma")
+        data = str(self.client.get("dashboard/list/").data)
+        assert "/superset/dashboard/world_health/" in data
+        assert "/superset/dashboard/births/" not in data
+
+    def test_gamma_user_schema_access_to_tables(self):
+        self.login(username="gamma")
+        data = str(self.client.get("tablemodelview/list/").data)
+        assert "wb_health_population" in data
+        assert "birth_names" not in data
+
+    def test_gamma_user_schema_access_to_charts(self):
+        self.login(username="gamma")
+        data = str(self.client.get("chart/list/").data)
+        assert (
+            "Life Expectancy VS Rural %" in data
+        )  # wb_health_population slice, has access
+        assert "Parallel Coordinates" in data  # wb_health_population slice, has access
+        assert "Girl Name Cloud" not in data  # birth_names slice, no access
+
+    def test_sqllab_gamma_user_schema_access_to_sqllab(self):
+        session = db.session
+
+        example_db = session.query(Database).filter_by(database_name="examples").one()
+        example_db.expose_in_sqllab = True
+        session.commit()
+
+        OLD_FLASK_GET_SQL_DBS_REQUEST = (
+            "databaseasync/api/read?_flt_0_expose_in_sqllab=1&"
+            "_oc_DatabaseAsync=database_name&_od_DatabaseAsync=asc"
+        )
+        self.login(username="gamma")
+        databases_json = self.client.get(OLD_FLASK_GET_SQL_DBS_REQUEST).json
+        assert databases_json["count"] == 1
+
+        arguments = {
+            "keys": ["none"],
+            "filters": [{"col": "expose_in_sqllab", "opr": "eq", "value": True}],
+            "order_columns": "database_name",
+            "order_direction": "asc",
+            "page": 0,
+            "page_size": -1,
+        }
+        NEW_FLASK_GET_SQL_DBS_REQUEST = f"/api/v1/database/?q={prison.dumps(arguments)}"
+        self.login(username="gamma")
+        databases_json = self.client.get(NEW_FLASK_GET_SQL_DBS_REQUEST).json
+        assert databases_json["count"] == 1
+        self.logout()
 
     def assert_can_read(self, view_menu, permissions_set):
         self.assertIn(("can_show", view_menu), permissions_set)

@@ -58,6 +58,7 @@ class BaseDatasource(AuditMixinNullable, ImportMixin):
     cache_timeout = Column(Integer)
     params = Column(String(1000))
     perm = Column(String(1000))
+    schema_perm = Column(String(1000))
 
     sql = None
     owners = None

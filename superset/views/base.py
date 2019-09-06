@@ -32,6 +32,7 @@ from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
 from flask_wtf.form import FlaskForm
 import simplejson as json
+from sqlalchemy import or_
 from werkzeug.exceptions import HTTPException
 from wtforms.fields.core import Field, UnboundField
 import yaml
@@ -325,6 +326,16 @@ class SupersetFilter(BaseFilter):
         """Whether the user has this perm"""
         return (permission_name, view_menu_name) in self.get_all_permissions()
 
+    # TODO(bogdan): consider caching.
+    def get_databases_from_schema_access(self):
+        vms = self.get_view_menus("schema_access")
+        found_databases = set()
+        for vm in vms:
+            # [database_name].[schema_name]
+            database_name = vm.split(".")[0][1:-1]
+            found_databases.add(database_name)
+        return found_databases
+
     def get_view_menus(self, permission_name):
         """Returns the details of view_menus for a perm name"""
         vm = set()
@@ -339,8 +350,10 @@ class DatasourceFilter(SupersetFilter):
         if security_manager.all_datasource_access():
             return query
         perms = self.get_view_menus("datasource_access")
-        # TODO(bogdan): add `schema_access` support here
-        return query.filter(self.model.perm.in_(perms))
+        schema_perms = self.get_view_menus("schema_access")
+        return query.filter(
+            or_(self.model.perm.in_(perms), self.model.schema_perm.in_(schema_perms))
+        )
 
 
 class CsvResponse(Response):
