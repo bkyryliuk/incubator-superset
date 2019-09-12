@@ -41,9 +41,7 @@ from flask_appbuilder.security.decorators import has_access, has_access_api
 from flask_appbuilder.security.sqla import models as ab_models
 from flask_babel import gettext as __
 from flask_babel import lazy_gettext as _
-import msgpack
 import pandas as pd
-import pyarrow as pa
 import simplejson as json
 from sqlalchemy import and_, or_, select
 from werkzeug.routing import BaseConverter
@@ -105,6 +103,10 @@ from .utils import (
     get_form_data,
     get_viz,
 )
+
+if results_backend_use_msgpack:
+    import msgpack
+    import pyarrow as pa
 
 config = app.config
 CACHE_DEFAULT_TIMEOUT = config.get("CACHE_DEFAULT_TIMEOUT", 0)

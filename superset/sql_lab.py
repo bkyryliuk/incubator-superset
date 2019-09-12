@@ -26,8 +26,6 @@ import backoff
 from celery.exceptions import SoftTimeLimitExceeded
 from contextlib2 import contextmanager
 from flask_babel import lazy_gettext as _
-import msgpack
-import pyarrow as pa
 import simplejson as json
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
@@ -48,6 +46,10 @@ from superset.tasks.celery_app import app as celery_app
 from superset.utils.core import json_iso_dttm_ser, QueryStatus, sources, zlib_compress
 from superset.utils.dates import now_as_float
 from superset.utils.decorators import stats_timing
+
+if results_backend_use_msgpack:
+    import msgpack
+    import pyarrow as pa
 
 config = app.config
 stats_logger = config.get("STATS_LOGGER")
