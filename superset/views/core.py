@@ -109,6 +109,10 @@ from .utils import (
     get_viz,
 )
 
+if results_backend_use_msgpack:
+    import msgpack
+    import pyarrow as pa
+
 config = app.config
 CACHE_DEFAULT_TIMEOUT = config.get("CACHE_DEFAULT_TIMEOUT", 0)
 SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT = config.get(
