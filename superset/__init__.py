@@ -33,7 +33,7 @@ from flask_wtf.csrf import CSRFProtect
 
 from superset import config
 from superset.connectors.connector_registry import ConnectorRegistry
-from superset.security import SupersetSecurityManager
+from superset.security.security import SupersetSecurityManager
 from superset.utils.core import pessimistic_connection_handling, setup_cache
 from superset.utils.log import DBEventLogger, get_event_logger_from_cfg_value
 
