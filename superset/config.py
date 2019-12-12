@@ -510,6 +510,13 @@ SQLLAB_ASYNC_TIME_LIMIT_SEC = 60 * 60 * 6
 # timeout.
 SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT = 10  # seconds
 
+# Flag that controls if limit should be inforced on the create table as queries.
+SQLLAB_CTA_NO_LIMIT = False
+
+# Function accepts username, schema name and sql that will be run e.g.:
+# SQLLAB_CTA_SCHEMA_NAME_FUNC = lambda username, _, _: username
+SQLLAB_CTA_SCHEMA_NAME_FUNC = None  # seconds
+
 # An instantiated derivative of werkzeug.contrib.cache.BaseCache
 # if enabled, it can be used to store the results of long-running queries
 # in SQL Lab by using the "Run Async" button/feature

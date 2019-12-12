@@ -21,7 +21,7 @@ from random import random
 
 import prison
 
-from superset import db, security_manager
+from superset import config, db, security_manager
 from superset.connectors.sqla.models import SqlaTable
 from superset.dataframe import SupersetDataFrame
 from superset.db_engine_specs import BaseEngineSpec
@@ -29,6 +29,10 @@ from superset.models.sql_lab import Query
 from superset.utils.core import datetime_to_epoch, get_example_database
 
 from .base_tests import SupersetTestCase
+
+# from unittest.mock import patch
+
+
 
 QUERY_1 = "SELECT * FROM birth_names LIMIT 1"
 QUERY_2 = "SELECT * FROM NO_TABLE"
@@ -63,6 +67,30 @@ class SqlLabTests(SupersetTestCase):
 
         data = self.run_sql("SELECT * FROM unexistant_table", "2")
         self.assertLess(0, len(data["error"]))
+
+    def test_sql_json_cta(self):
+        sqllab_db = self._get_database_by_name("examples")
+        old_allow_ctas = sqllab_db.allow_ctas
+        # enable cta
+        sqllab_db.allow_ctas = True
+
+        self.login("admin")
+        self.run_sql(
+            "SELECT * FROM birth_names",
+            "1",
+            database_name="examples",
+            tmp_table_name="test_target",
+            select_as_cta=True,
+        )
+
+        # assertions
+        data = db.session.execute("SELECT * FROM main.test_target").fetchall()
+        self.assertEqual(666, len(data))
+
+        # cleanup
+        db.session.execute("DROP TABLE main.test_target")
+        sqllab_db.allow_ctas = old_allow_ctas
+        db.session.commit()
 
     def test_multi_sql(self):
         self.login("admin")
