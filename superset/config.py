@@ -510,6 +510,33 @@ SQLLAB_ASYNC_TIME_LIMIT_SEC = 60 * 60 * 6
 # timeout.
 SQLLAB_QUERY_COST_ESTIMATE_TIMEOUT = 10  # seconds
 
+# Flag that controls if limit should be enforced on the CTA (create table as queries).
+SQLLAB_CTA_NO_LIMIT = False
+
+# This allows you to define custom logic around the "CREATE TABLE AS" or CTAS feature
+# in SQL Lab that defines where the target schema should be for a given user.
+# Database `CTAS Schema` has a precedence over this setting.
+# Example below returns a username and CTA queries will write tables into the schema
+# name `username`
+# SQLLAB_CTA_SCHEMA_NAME_FUNC = lambda database, user, schema, sql: user.username
+# This is move involved example where depending on the database you can leverage data
+# available to assign schema for the CTA query:
+# def compute_schema_name(database: Database, user: User, schema: str, sql: str) -> str:
+#     if database.name == 'mysql_payments_slave':
+#         return 'tmp_superset_schema'
+#     if database.name == 'presto_gold':
+#         return user.username
+#     if database.name == 'analytics':
+#         if 'analytics' in [r.name for r in user.roles]:
+#             return 'analytics_cta'
+#         else:
+#             return f'tmp_{schema}'
+# Function accepts database object, user object, schema name and sql that will be run.
+SQLLAB_CTA_SCHEMA_NAME_FUNC = (
+    None
+)  # type: Optional[Callable[[str, str, str, str], str]]
+
+
 # An instantiated derivative of werkzeug.contrib.cache.BaseCache
 # if enabled, it can be used to store the results of long-running queries
 # in SQL Lab by using the "Run Async" button/feature

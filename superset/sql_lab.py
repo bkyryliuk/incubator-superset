@@ -253,6 +253,7 @@ def execute_sql_statement(sql_statement, query, user_name, session, cursor, log_
 
     logger.debug(f"Query {query.id}: Fetching cursor description")
     cursor_description = cursor.description
+
     return SupersetDataFrame(data, cursor_description, db_engine_spec)
 
 
@@ -368,6 +369,9 @@ def execute_sql_statements(
                     payload = handle_query_error(msg, query, session, payload)
                     return payload
 
+        # Commit the connection so CTA queries will create the table.
+        conn.commit()
+
     # Success, updating the query entry in database
     query.rows = cdf.size
     query.progress = 100
@@ -376,7 +380,6 @@ def execute_sql_statements(
         query.select_sql = database.select_star(
             query.tmp_table_name,
             limit=query.limit,
-            schema=database.force_ctas_schema,
             show_cols=False,
             latest_partition=False,
         )
@@ -385,7 +388,6 @@ def execute_sql_statements(
     data, selected_columns, all_columns, expanded_columns = _serialize_and_expand_data(
         cdf, db_engine_spec, store_results and results_backend_use_msgpack, expand_data
     )
-
     payload.update(
         {
             "status": QueryStatus.SUCCESS,
