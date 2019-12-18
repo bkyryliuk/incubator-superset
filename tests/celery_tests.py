@@ -17,7 +17,9 @@
 # isort:skip_file
 """Unit tests for Superset Celery worker"""
 import datetime
+import io
 import json
+import logging
 import subprocess
 import time
 import unittest
@@ -90,6 +92,11 @@ class AppContextTests(SupersetTestCase):
             flask._app_ctx_stack.push(popped_app)
 
 
+def log_subprocess_output(pipe):
+    for line in iter(pipe.readline, b""):  # b'\n'-separated lines
+        logging.info("got line from subprocess: %r", line)
+
+
 class CeleryTestCase(SupersetTestCase):
     def get_query_by_name(self, sql):
         session = db.session
@@ -120,7 +127,11 @@ class CeleryTestCase(SupersetTestCase):
 
             base_dir = app.config["BASE_DIR"]
             worker_command = base_dir + "/bin/superset worker -w 2"
-            subprocess.Popen(worker_command, shell=True, stdout=subprocess.PIPE)
+            process = subprocess.Popen(
+                worker_command, shell=True, stdout=subprocess.PIPE
+            )
+            output, error = process.communicate()
+            log_subprocess_output(io.StringIO(output))
 
     @classmethod
     def tearDownClass(cls):

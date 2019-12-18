@@ -2645,7 +2645,7 @@ class Superset(BaseSupersetView):
             )
 
         # set LIMIT after template processing
-        if config.get("SQLLAB_CTA_NO_LIMIT"):
+        if not config.get("SQLLAB_CTA_NO_LIMIT", False):
             limits = [mydb.db_engine_spec.get_limit_from_sql(rendered_query), limit]
             query.limit = min(lim for lim in limits if lim is not None)
 

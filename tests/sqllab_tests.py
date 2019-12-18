@@ -30,10 +30,6 @@ from superset.utils.core import datetime_to_epoch, get_example_database
 
 from .base_tests import SupersetTestCase
 
-# from unittest.mock import patch
-
-
-
 QUERY_1 = "SELECT * FROM birth_names LIMIT 1"
 QUERY_2 = "SELECT * FROM NO_TABLE"
 QUERY_3 = "SELECT * FROM birth_names LIMIT 10"
