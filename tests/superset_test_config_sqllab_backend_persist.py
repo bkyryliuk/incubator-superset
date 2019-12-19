@@ -31,7 +31,6 @@ if "SUPERSET__SQLALCHEMY_DATABASE_URI" in os.environ:
     SQLALCHEMY_DATABASE_URI = os.environ["SUPERSET__SQLALCHEMY_DATABASE_URI"]
 
 SQL_MAX_ROW = 666
-SQLLAB_CTA_SCHEMA_NAME_FUNC = lambda schema, sql, username: "main"
 FEATURE_FLAGS = {"foo": "bar"}
 
 

@@ -248,6 +248,15 @@ def _deserialize_results_payload(
             return json.loads(payload)  # type: ignore
 
 
+def get_cta_schema_name(schema, sql, username):
+    func = config.get(
+        "SQLLAB_CTA_SCHEMA_NAME_FUNC"
+    )  # type: Callable[[str, str, str], str]
+    if not func:
+        return None
+    return func(schema, sql, username)
+
+
 class SliceFilter(BaseFilter):
     def apply(self, query, func):  # noqa
         if security_manager.all_datasource_access():
@@ -2586,13 +2595,15 @@ class Superset(BaseSupersetView):
         # Set tmp_table_name for CTA
         if select_as_cta and mydb.force_ctas_schema:
             tmp_table_name = f"{mydb.force_ctas_schema}.{tmp_table_name}"
-        elif select_as_cta and config.get("SQLLAB_CTA_SCHEMA_NAME_FUNC"):
-            # TODO(bkyryliuk): consider passing rendered_query
-            func = config.get(
-                "SQLLAB_CTA_SCHEMA_NAME_FUNC"
-            )  # type: Callable[[str, str, str], str]
-            dest_schema_name = func(schema, sql, g.user.username if g.user else None)
-            tmp_table_name = f"{dest_schema_name}.{tmp_table_name}"
+        elif select_as_cta:
+            dest_schema_name = get_cta_schema_name(
+                schema, sql, g.user.username if g.user else None
+            )
+            tmp_table_name = (
+                f"{dest_schema_name}.{tmp_table_name}"
+                if dest_schema_name
+                else tmp_table_name
+            )
 
         # Save current query
         query = Query(

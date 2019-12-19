@@ -18,6 +18,7 @@
 import json
 from datetime import datetime, timedelta
 from random import random
+from unittest import mock
 
 import prison
 
@@ -64,15 +65,32 @@ class SqlLabTests(SupersetTestCase):
         data = self.run_sql("SELECT * FROM unexistant_table", "2")
         self.assertLess(0, len(data["error"]))
 
-    def test_sql_json_cta(self):
-        sqllab_db = self._get_database_by_name("examples")
-        old_allow_ctas = sqllab_db.allow_ctas
-        # enable cta
-        sqllab_db.allow_ctas = True
+    @mock.patch(
+        "superset.views.core.get_cta_schema_name", lambda s, sql, u: f"{u}_database"
+    )
+    # main database is available in mysql, postgres and sqlite
+    def test_sql_json_cta_dynamic_db(self):
+        main_db = get_example_database()
+        if main_db.backend == "sqlite":
+            # sqlite doesn't support database creation
+            return
+        db.session.commit()
+        # commit before and after to avoid:
+        # psycopg2.InternalError: CREATE DATABASE cannot run inside a transaction block
+        db.session.execute("CREATE DATABASE IF NOT EXISTS admin_database")
+        db.session.commit()
+        if main_db.backend == "mysql":
+            db.session.execute(
+                "GRANT ALL PRIVILEGES ON admin_database.* TO mysqluser'@'localhost';"
+            )
+            db.session.commit()
+
+        old_allow_ctas = main_db.allow_ctas
+        main_db.allow_ctas = True  # enable cta
 
         self.login("admin")
         self.run_sql(
-            "SELECT * FROM birth_names",
+            "SELECT * FROM main.birth_names",
             "1",
             database_name="examples",
             tmp_table_name="test_target",
@@ -84,8 +102,13 @@ class SqlLabTests(SupersetTestCase):
         self.assertEqual(666, len(data))
 
         # cleanup
-        db.session.execute("DROP TABLE main.test_target")
-        sqllab_db.allow_ctas = old_allow_ctas
+        db.session.execute("DROP TABLE examples.test_target")
+
+        db.session.commit()
+        db.session.execute("DROP DATABASE sqllab_test_db")
+        db.session.commit()
+
+        main_db.allow_ctas = old_allow_ctas
         db.session.commit()
 
     def test_multi_sql(self):

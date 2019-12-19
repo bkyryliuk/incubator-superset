@@ -30,7 +30,7 @@ if "SUPERSET__SQLALCHEMY_DATABASE_URI" in os.environ:
 
 SQL_MAX_ROW = 666
 FEATURE_FLAGS = {"foo": "bar"}
-SQLLAB_CTA_SCHEMA_NAME_FUNC = lambda schema, sql, username: "main"
+SQLLAB_CTA_SCHEMA_NAME_FUNC = lambda schema, sql, username: "sqllab_test_db"
 
 
 def GET_FEATURE_FLAGS_FUNC(ff):
