@@ -515,7 +515,7 @@ SQLLAB_CTA_NO_LIMIT = False
 
 # Function accepts username, schema name and sql that will be run e.g.:
 # SQLLAB_CTA_SCHEMA_NAME_FUNC = lambda username, _, _: username
-SQLLAB_CTA_SCHEMA_NAME_FUNC = None  # seconds
+SQLLAB_CTA_SCHEMA_NAME_FUNC = None
 
 # An instantiated derivative of werkzeug.contrib.cache.BaseCache
 # if enabled, it can be used to store the results of long-running queries

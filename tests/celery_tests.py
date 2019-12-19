@@ -114,17 +114,15 @@ class CeleryTestCase(SupersetTestCase):
             main_db = get_example_database()
             # sqlite supports attaching schemas only for the single connection. It doesn't work with our celery setup.
             # https://www.sqlite.org/inmemorydb.html
+            if main_db.backend == "postgresql":
+                db.session.execute("SET AUTOCOMMIT = ON")
+
             if main_db.backend != "sqlite":
                 db.session.commit()
                 # commit before and after to avoid:
                 # psycopg2.InternalError: CREATE DATABASE cannot run inside a transaction block
-                db.session.execute("CREATE DATABASE IF NOT EXISTS sqllab_test_db")
+                db.session.execute("CREATE DATABASE sqllab_test_db")
                 db.session.commit()
-                if main_db.backend == "mysql":
-                    db.session.execute(
-                        "GRANT ALL PRIVILEGES ON sqllab_test_db.* TO mysqluser'@'localhost';"
-                    )
-                    db.session.commit()
 
                 class CeleryConfig(object):
                     BROKER_URL = app.config["CELERY_CONFIG"].BROKER_URL
@@ -147,6 +145,7 @@ class CeleryTestCase(SupersetTestCase):
             main_db = get_example_database()
             if main_db.backend != "sqlite":
                 db.session.commit()
+                db.session.execute("SET AUTOCOMMIT = ON")
                 db.session.execute("DROP DATABASE sqllab_test_db")
                 db.session.commit()
 
@@ -230,15 +229,14 @@ class CeleryTestCase(SupersetTestCase):
     )
     def test_run_sync_query_cta_cta_config(self):
         main_db = get_example_database()
+        db_id = main_db.id
         if main_db.backend == "sqlite":
             # sqlite doesn't support schemas
             return
         tmp_table_name = "tmp_async_22"
         self.drop_table_if_exists(tmp_table_name, main_db)
         sql_where = 'SELECT name FROM birth_names WHERE name="James" LIMIT 1'
-        result = self.run_sql(
-            main_db.id, sql_where, "2", tmp_table=tmp_table_name, cta=True
-        )
+        result = self.run_sql(db_id, sql_where, "2", tmp_table=tmp_table_name, cta=True)
 
         self.assertEqual(QueryStatus.SUCCESS, result["query"]["state"])
         self.assertEqual([], result["data"])
@@ -253,7 +251,7 @@ class CeleryTestCase(SupersetTestCase):
             query.executed_sql,
         )
 
-        results = self.run_sql(main_db.id, query.select_sql)
+        results = self.run_sql(db_id, query.select_sql)
         self.assertEqual(results["status"], "success")
         self.assertEquals(len(results["data"]), 10)
 
@@ -262,13 +260,14 @@ class CeleryTestCase(SupersetTestCase):
     )
     def test_run_async_query_cta_config(self):
         main_db = get_example_database()
+        db_id = main_db.id
         if main_db.backend == "sqlite":
             # sqlite doesn't support schemas
             return
         self.drop_table_if_exists("sqllab_test_table_async_1", main_db)
         sql_where = "SELECT name FROM birth_names WHERE name='James' LIMIT 10"
         result = self.run_sql(
-            main_db.id,
+            db_id,
             sql_where,
             "4",
             async_=True,
@@ -313,9 +312,9 @@ class CeleryTestCase(SupersetTestCase):
         query = self.get_query_by_id(result["query"]["serverId"])
         self.assertEqual(QueryStatus.SUCCESS, query.status)
 
-        self.assertTrue("FROM examples.tmp_async_1" in query.select_sql)
+        self.assertTrue("FROM tmp_async_1" in query.select_sql)
         self.assertEqual(
-            "CREATE TABLE examples.tmp_async_1 AS \n"
+            "CREATE TABLE tmp_async_1 AS \n"
             "SELECT name FROM birth_names "
             "WHERE name='James' "
             "LIMIT 10",

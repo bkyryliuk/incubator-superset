@@ -68,29 +68,24 @@ class SqlLabTests(SupersetTestCase):
     @mock.patch(
         "superset.views.core.get_cta_schema_name", lambda s, sql, u: f"{u}_database"
     )
-    # main database is available in mysql, postgres and sqlite
     def test_sql_json_cta_dynamic_db(self):
         main_db = get_example_database()
         if main_db.backend == "sqlite":
             # sqlite doesn't support database creation
             return
-        db.session.commit()
+        if main_db.backend == "postgresql":
+            db.session.execute("SET AUTOCOMMIT = ON")
         # commit before and after to avoid:
         # psycopg2.InternalError: CREATE DATABASE cannot run inside a transaction block
-        db.session.execute("CREATE DATABASE IF NOT EXISTS admin_database")
+        db.session.execute("CREATE DATABASE admin_database")
         db.session.commit()
-        if main_db.backend == "mysql":
-            db.session.execute(
-                "GRANT ALL PRIVILEGES ON admin_database.* TO mysqluser'@'localhost';"
-            )
-            db.session.commit()
 
         old_allow_ctas = main_db.allow_ctas
         main_db.allow_ctas = True  # enable cta
 
         self.login("admin")
         self.run_sql(
-            "SELECT * FROM main.birth_names",
+            "SELECT * FROM birth_names",
             "1",
             database_name="examples",
             tmp_table_name="test_target",
@@ -98,11 +93,11 @@ class SqlLabTests(SupersetTestCase):
         )
 
         # assertions
-        data = db.session.execute("SELECT * FROM main.test_target").fetchall()
+        data = db.session.execute("SELECT * FROM admin_database.test_target").fetchall()
         self.assertEqual(666, len(data))
 
         # cleanup
-        db.session.execute("DROP TABLE examples.test_target")
+        db.session.execute("DROP TABLE admin_database.test_target")
 
         db.session.commit()
         db.session.execute("DROP DATABASE sqllab_test_db")
