@@ -644,7 +644,7 @@ class BaseEngineSpec:  # pylint: disable=too-many-public-methods
         if schema:
             full_table_name = quote(schema) + "." + quote(table_name)
         else:
-            full_table_name = quote(table_name)
+            full_table_name = ".".join([quote(t) for t in table_name.split(".")])
 
         if sql is not None:
             subselect = f"(\n{sql}\n) AS {quote(table_name)}"

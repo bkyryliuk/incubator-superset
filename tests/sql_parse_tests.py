@@ -460,10 +460,19 @@ class SupersetTestCase(unittest.TestCase):
         newsql = parsed.get_query_with_new_limit(1000)
         self.assertEqual(newsql, sql + "\nLIMIT 1000")
 
-    def test_get_query_with_new_limit(self):
+    def test_get_query_with_new_limit_lower(self):
         sql = "SELECT * FROM birth_names LIMIT 555"
         parsed = sql_parse.ParsedQuery(sql)
         newsql = parsed.get_query_with_new_limit(1000)
+        # not applied as new limit is higher
+        expected = "SELECT * FROM birth_names LIMIT 555"
+        self.assertEqual(newsql, expected)
+
+    def test_get_query_with_new_limit_upper(self):
+        sql = "SELECT * FROM birth_names LIMIT 1555"
+        parsed = sql_parse.ParsedQuery(sql)
+        newsql = parsed.get_query_with_new_limit(1000)
+        # applied as new limit is lower
         expected = "SELECT * FROM birth_names LIMIT 1000"
         self.assertEqual(newsql, expected)
 

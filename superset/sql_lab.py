@@ -374,7 +374,6 @@ def execute_sql_statements(
         query.select_sql = database.select_star(
             query.tmp_table_name,
             limit=query.limit,
-            schema=database.force_ctas_schema,
             show_cols=False,
             latest_partition=False,
         )

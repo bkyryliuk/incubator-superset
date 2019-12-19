@@ -40,7 +40,7 @@ from superset.utils.core import get_example_database
 
 from .base_tests import SupersetTestCase
 
-CELERY_SLEEP_TIME = 5
+CELERY_SLEEP_TIME = 10
 
 
 class UtilityFunctionTests(SupersetTestCase):
@@ -92,11 +92,6 @@ class AppContextTests(SupersetTestCase):
             flask._app_ctx_stack.push(popped_app)
 
 
-def log_subprocess_output(pipe):
-    for line in iter(pipe.readline, b""):  # b'\n'-separated lines
-        logging.info("got line from subprocess: %r", line)
-
-
 class CeleryTestCase(SupersetTestCase):
     def get_query_by_name(self, sql):
         session = db.session
@@ -127,11 +122,7 @@ class CeleryTestCase(SupersetTestCase):
 
             base_dir = app.config["BASE_DIR"]
             worker_command = base_dir + "/bin/superset worker -w 2"
-            process = subprocess.Popen(
-                worker_command, shell=True, stdout=subprocess.PIPE
-            )
-            output, error = process.communicate()
-            log_subprocess_output(io.StringIO(output))
+            subprocess.Popen(worker_command, shell=True, stdout=subprocess.PIPE)
 
     @classmethod
     def tearDownClass(cls):
@@ -232,9 +223,9 @@ class CeleryTestCase(SupersetTestCase):
         query = self.get_query_by_id(result["query"]["serverId"])
         self.assertEqual(QueryStatus.SUCCESS, query.status)
 
-        self.assertTrue("FROM tmp_async_1" in query.select_sql)
+        self.assertTrue("FROM main.tmp_async_1" in query.select_sql)
         self.assertEqual(
-            "CREATE TABLE tmp_async_1 AS \n"
+            "CREATE TABLE main.tmp_async_1 AS \n"
             "SELECT name FROM birth_names "
             "WHERE name='James' "
             "LIMIT 10",
@@ -266,9 +257,10 @@ class CeleryTestCase(SupersetTestCase):
 
         query = self.get_query_by_id(result["query"]["serverId"])
         self.assertEqual(QueryStatus.SUCCESS, query.status)
-        self.assertTrue(f"FROM {tmp_table}" in query.select_sql)
+        self.assertTrue(f"FROM main.{tmp_table}" in query.select_sql)
         self.assertEqual(
-            f"CREATE TABLE {tmp_table} AS \n" "SELECT name FROM birth_names LIMIT 1",
+            f"CREATE TABLE main.{tmp_table} AS \n"
+            "SELECT name FROM birth_names LIMIT 1",
             query.executed_sql,
         )
         self.assertEqual(sql_where, query.sql)
