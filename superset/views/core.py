@@ -2588,9 +2588,10 @@ class Superset(BaseSupersetView):
             tmp_table_name = f"{mydb.force_ctas_schema}.{tmp_table_name}"
         elif select_as_cta and config.get("SQLLAB_CTA_SCHEMA_NAME_FUNC"):
             # TODO(bkyryliuk): consider passing rendered_query
-            dest_schema_name = config.get("SQLLAB_CTA_SCHEMA_NAME_FUNC")(
-                schema, sql, g.user.username if g.user else None
-            )
+            func = config.get(
+                "SQLLAB_CTA_SCHEMA_NAME_FUNC"
+            )  # type: Callable[[str, str, str], str]
+            dest_schema_name = func(schema, sql, g.user.username if g.user else None)
             tmp_table_name = f"{dest_schema_name}.{tmp_table_name}"
 
         # Save current query
