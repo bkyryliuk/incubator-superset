@@ -73,8 +73,8 @@ class SqlLabTests(SupersetTestCase):
         if main_db.backend == "sqlite":
             # sqlite doesn't support database creation
             return
-        if main_db.backend == "postgresql":
-            db.session.execute("SET AUTOCOMMIT = ON")
+        # if main_db.backend == "postgresql":
+        #     db.session.execute("SET AUTOCOMMIT = ON")
         # commit before and after to avoid:
         # psycopg2.InternalError: CREATE DATABASE cannot run inside a transaction block
         db.session.execute("CREATE DATABASE admin_database")
@@ -100,7 +100,7 @@ class SqlLabTests(SupersetTestCase):
         db.session.execute("DROP TABLE admin_database.test_target")
 
         db.session.commit()
-        db.session.execute("DROP DATABASE sqllab_test_db")
+        db.session.execute("DROP DATABASE admin_database")
         db.session.commit()
 
         main_db.allow_ctas = old_allow_ctas
