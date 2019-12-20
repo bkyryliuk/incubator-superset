@@ -251,6 +251,7 @@ def execute_sql_statement(sql_statement, query, user_name, session, cursor, log_
 
     logger.debug(f"Query {query.id}: Fetching cursor description")
     cursor_description = cursor.description
+
     return SupersetDataFrame(data, cursor_description, db_engine_spec)
 
 
@@ -341,7 +342,8 @@ def execute_sql_statements(
     )
     # Sharing a single connection and cursor across the
     # execution of all statements (if many)
-    with closing(engine.raw_connection()) as conn:
+    tmp_conn = engine.raw_connection()
+    with closing(tmp_conn) as conn:
         with closing(conn.cursor()) as cursor:
             statement_count = len(statements)
             for i, statement in enumerate(statements):
@@ -365,6 +367,11 @@ def execute_sql_statements(
                         msg = f"[Statement {i+1} out of {statement_count}] " + msg
                     payload = handle_query_error(msg, query, session, payload)
                     return payload
+
+        # Commit the connection so CTA queries will create the table.
+        # TODO(bk): consider if it's only needed for postgres.
+        if conn:
+            conn.commit()
 
     # Success, updating the query entry in database
     query.rows = cdf.size

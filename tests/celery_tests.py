@@ -114,40 +114,30 @@ class CeleryTestCase(SupersetTestCase):
             main_db = get_example_database()
             # sqlite supports attaching schemas only for the single connection. It doesn't work with our celery setup.
             # https://www.sqlite.org/inmemorydb.html
-            if main_db.backend == "postgresql":
-                db.session.execute("SET AUTOCOMMIT = ON")
-
             if main_db.backend != "sqlite":
-                db.session.commit()
-                # commit before and after to avoid:
-                # psycopg2.InternalError: CREATE DATABASE cannot run inside a transaction block
-                db.session.execute("CREATE DATABASE sqllab_test_db")
-                db.session.commit()
+                db.session.execute("CREATE SCHEMA IF NOT EXISTS sqllab_test_db")
 
-                class CeleryConfig(object):
-                    BROKER_URL = app.config["CELERY_CONFIG"].BROKER_URL
-                    CELERY_IMPORTS = ("superset.sql_lab",)
-                    CELERY_ANNOTATIONS = {"sql_lab.add": {"rate_limit": "10/s"}}
-                    CONCURRENCY = 1
+            class CeleryConfig(object):
+                BROKER_URL = app.config["CELERY_CONFIG"].BROKER_URL
+                CELERY_IMPORTS = ("superset.sql_lab",)
+                CELERY_ANNOTATIONS = {"sql_lab.add": {"rate_limit": "10/s"}}
+                CONCURRENCY = 1
 
-                app.config["CELERY_CONFIG"] = CeleryConfig
+            app.config["CELERY_CONFIG"] = CeleryConfig
 
-                db.session.query(Query).delete()
-                db.session.commit()
+            db.session.query(Query).delete()
+            db.session.commit()
 
-                base_dir = app.config["BASE_DIR"]
-                worker_command = base_dir + "/bin/superset worker -w 2"
-                subprocess.Popen(worker_command, shell=True, stdout=subprocess.PIPE)
+            base_dir = app.config["BASE_DIR"]
+            worker_command = base_dir + "/bin/superset worker -w 2"
+            subprocess.Popen(worker_command, shell=True, stdout=subprocess.PIPE)
 
     @classmethod
     def tearDownClass(cls):
         with app.app_context():
             main_db = get_example_database()
             if main_db.backend != "sqlite":
-                db.session.commit()
-                db.session.execute("SET AUTOCOMMIT = ON")
-                db.session.execute("DROP DATABASE sqllab_test_db")
-                db.session.commit()
+                db.session.execute("DROP SCHEMA sqllab_test_db")
 
         subprocess.call(
             "ps auxww | grep 'celeryd' | awk '{print $2}' | xargs kill -9", shell=True
@@ -227,15 +217,16 @@ class CeleryTestCase(SupersetTestCase):
     @mock.patch(
         "superset.views.core.get_cta_schema_name", lambda s, sql, u: "sqllab_test_db"
     )
-    def test_run_sync_query_cta_cta_config(self):
+    def test_run_sync_query_cta_config(self):
         main_db = get_example_database()
         db_id = main_db.id
         if main_db.backend == "sqlite":
             # sqlite doesn't support schemas
             return
         tmp_table_name = "tmp_async_22"
-        self.drop_table_if_exists(tmp_table_name, main_db)
-        sql_where = 'SELECT name FROM birth_names WHERE name="James" LIMIT 1'
+        self.drop_table_if_exists(f"sqllab_test_db.{tmp_table_name}", main_db)
+        name = "James"
+        sql_where = f"SELECT name FROM birth_names WHERE name='{name}' LIMIT 1"
         result = self.run_sql(
             db_id, sql_where, "cid2", tmp_table=tmp_table_name, cta=True
         )
@@ -248,11 +239,11 @@ class CeleryTestCase(SupersetTestCase):
         self.assertEqual(
             "CREATE TABLE sqllab_test_db.tmp_async_22 AS \n"
             "SELECT name FROM birth_names "
-            'WHERE name="James" '
+            "WHERE name='James' "
             "LIMIT 1",
             query.executed_sql,
         )
-
+        time.sleep(2)
         results = self.run_sql(db_id, query.select_sql)
         self.assertEqual(results["status"], "success")
         self.assertEquals(len(results["data"]), 1)
@@ -296,11 +287,11 @@ class CeleryTestCase(SupersetTestCase):
         main_db = get_example_database()
         db_id = main_db.id
 
-        self.drop_table_if_exists("tmp_async_1", main_db)
+        self.drop_table_if_exists("tmp_async_4", main_db)
 
         sql_where = "SELECT name FROM birth_names WHERE name='James' LIMIT 10"
         result = self.run_sql(
-            db_id, sql_where, "cid4", async_=True, tmp_table="tmp_async_1", cta=True
+            db_id, sql_where, "cid4", async_=True, tmp_table="tmp_async_4", cta=True
         )
         db.session.close()
         assert result["query"]["state"] in (
