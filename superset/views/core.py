@@ -2844,6 +2844,7 @@ class Superset(BaseSupersetView):
         db_id = int(request.args.get("db_id"))
         database = db.session.query(models.Database).filter_by(id=db_id).one()
         try:
+            # TODO(bogdankyryliuk): find a better way to check if upload is allowed
             schemas_allowed = database.get_schema_access_for_csv_upload()
             if (
                 security_manager.database_access(database)

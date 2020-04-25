@@ -591,6 +591,11 @@ CSV_TO_HIVE_UPLOAD_DIRECTORY = "EXTERNAL_HIVE_TABLES/"
 # uploading CSVs will be stored.
 UPLOADED_CSV_HIVE_NAMESPACE = None
 
+# database
+UPLOADED_CSV_SCHEMA_FUNC: Callable[
+    ["Database", "models.User", str], Optional[str]
+] = lambda database, user, schema: UPLOADED_CSV_HIVE_NAMESPACE
+
 # A dictionary of items that gets merged into the Jinja context for
 # SQL Lab. The existing context gets updated with this dictionary,
 # meaning values for existing keys get overwritten by the content of this
