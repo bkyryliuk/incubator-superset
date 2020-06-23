@@ -19,7 +19,7 @@ import logging
 import re
 from collections import defaultdict
 from contextlib import closing
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, cast, Dict, List, Optional, Union
 from urllib import parse
 
@@ -81,7 +81,7 @@ from superset.security.analytics_db_safety import (
     check_sqlalchemy_uri,
     DBSecurityException,
 )
-from superset.sql_parse import ParsedQuery, Table
+from superset.sql_parse import CtasMethod, ParsedQuery, Table
 from superset.sql_validators import get_validator_by_name
 from superset.typing import FlaskResponse
 from superset.utils import core as utils, dashboard_import_export
@@ -93,7 +93,6 @@ from superset.views.base import (
     BaseSupersetView,
     check_ownership,
     common_bootstrap_payload,
-    create_table_permissions,
     CsvResponse,
     data_payload_response,
     generate_download_headers,
@@ -103,7 +102,6 @@ from superset.views.base import (
     json_error_response,
     json_errors_response,
     json_success,
-    validate_sqlatable,
 )
 from superset.views.database.filters import DatabaseFilter
 from superset.views.utils import (
@@ -112,12 +110,14 @@ from superset.views.utils import (
     bootstrap_user_data,
     check_datasource_perms,
     check_slice_perms,
+    create_if_not_exists_table,
     get_cta_schema_name,
     get_dashboard_extra_filters,
     get_datasource_info,
     get_form_data,
     get_viz,
     is_owner,
+    parse_table_full_name,
 )
 from superset.viz import BaseViz
 
@@ -132,6 +132,7 @@ logger = logging.getLogger(__name__)
 DATABASE_KEYS = [
     "allow_csv_upload",
     "allow_ctas",
+    "allow_cvas",
     "allow_dml",
     "allow_multi_schema_metadata_fetch",
     "allow_run_async",
@@ -565,6 +566,44 @@ class Superset(BaseSupersetView):
 
     @event_logger.log_this
     @has_access
+    @expose(
+        "/explore_new/<int:database_id>/<datasource_type>/<datasource_name>/",
+        methods=["GET", "POST"],
+    )
+    def explore_new(
+        self, database_id: int, datasource_type: str, datasource_name: str,
+    ) -> FlaskResponse:
+        """Integration endpoint. Allows to visualize tables that were not precreated in Superset.
+
+        :param database_id: database id
+        :param datasource_type: table or druid
+        :param datasource_name: full name of the datasource, should include schema name if applicable
+        :return: redirects to the exploration page
+        """
+        database_id = int(database_id)
+        if datasource_type != "table":
+            flash(__("Only table datasource type is supported"), "danger")
+            return redirect("/")
+
+        schema_name, table_name = parse_table_full_name(datasource_name)
+        database_obj = db.session.query(models.Database).get(database_id)
+        table = Table(table_name, schema_name)
+
+        if not security_manager.can_access_table(database_obj, table):
+            flash(
+                __(security_manager.get_datasource_access_error_msg(table)), "danger",
+            )
+            return redirect("/")
+
+        # overloading is_sqllab_view to be able to hide the temporary tables from the table list.
+        is_sqllab_view = request.args.get("is_sqllab_view") == "true"
+        table_id = create_if_not_exists_table(
+            database_id, schema_name, table_name, is_sqllab_view=is_sqllab_view
+        )
+        return redirect(f"/superset/explore/{datasource_type}/{table_id}")
+
+    @event_logger.log_this
+    @has_access
     @expose("/explore/<datasource_type>/<int:datasource_id>/", methods=["GET", "POST"])
     @expose("/explore/", methods=["GET", "POST"])
     def explore(
@@ -623,7 +662,7 @@ class Superset(BaseSupersetView):
             not security_manager.can_access_datasource(datasource)
         ):
             flash(
-                __(security_manager.get_datasource_access_error_msg(datasource)),
+                __(security_manager.get_datasource_access_error_msg(datasource.name)),
                 "danger",
             )
             return redirect(
@@ -1631,7 +1670,9 @@ class Superset(BaseSupersetView):
                 ):
                     flash(
                         __(
-                            security_manager.get_datasource_access_error_msg(datasource)
+                            security_manager.get_datasource_access_error_msg(
+                                datasource.name
+                            )
                         ),
                         "danger",
                     )
@@ -1652,6 +1693,9 @@ class Superset(BaseSupersetView):
         ) and security_manager.can_access("can_save_dash", "Superset")
         dash_save_perm = security_manager.can_access("can_save_dash", "Superset")
         superset_can_explore = security_manager.can_access("can_explore", "Superset")
+        superset_can_explore_new = security_manager.can_access(
+            "can_explore_new", "Superset"
+        )
         superset_can_csv = security_manager.can_access("can_csv", "Superset")
         slice_can_edit = security_manager.can_access("can_edit", "SliceModelView")
 
@@ -1681,6 +1725,7 @@ class Superset(BaseSupersetView):
                 "dash_save_perm": dash_save_perm,
                 "dash_edit_perm": dash_edit_perm,
                 "superset_can_explore": superset_can_explore,
+                "superset_can_explore_new": superset_can_explore_new,
                 "superset_can_csv": superset_can_csv,
                 "slice_can_edit": slice_can_edit,
             }
@@ -1793,33 +1838,22 @@ class Superset(BaseSupersetView):
         * templateParams - params for the Jinja templating syntax, optional
         :return: Response
         """
-        data = json.loads(request.form["data"])
-        table_name = data["datasourceName"]
-        database_id = data["dbId"]
-        table = (
-            db.session.query(SqlaTable)
-            .filter_by(database_id=database_id, table_name=table_name)
-            .one_or_none()
+        data = json.loads(request.form.get("data", ""))
+        database_id = data.get("dbId")
+        table_name = data.get("datasourceName")
+        schema_name = data.get("schema")
+        # overloading is_sqllab_view to be able to hide the temporary tables from the table list.
+        is_sqllab_view = request.args.get("is_sqllab_view") == "true"
+        template_params = data.get("templateParams")
+
+        table_id = create_if_not_exists_table(
+            database_id,
+            schema_name,
+            table_name,
+            template_params=template_params,
+            is_sqllab_view=is_sqllab_view,
         )
-        if not table:
-            # Create table if doesn't exist.
-            with db.session.no_autoflush:
-                table = SqlaTable(table_name=table_name, owners=[g.user])
-                table.database_id = database_id
-                table.database = (
-                    db.session.query(models.Database).filter_by(id=database_id).one()
-                )
-                table.schema = data.get("schema")
-                table.template_params = data.get("templateParams")
-                # needed for the table validation.
-                validate_sqlatable(table)
-
-            db.session.add(table)
-            table.fetch_metadata()
-            create_table_permissions(table)
-            db.session.commit()
-
-        return json_success(json.dumps({"table_id": table.id}))
+        return json_success(json.dumps({"table_id": table_id}))
 
     @has_access
     @expose("/sqllab_viz/", methods=["POST"])
@@ -2240,6 +2274,9 @@ class Superset(BaseSupersetView):
             )
             limit = 0
         select_as_cta: bool = cast(bool, query_params.get("select_as_cta"))
+        ctas_method: CtasMethod = cast(
+            CtasMethod, query_params.get("ctas_method", CtasMethod.TABLE)
+        )
         tmp_table_name: str = cast(str, query_params.get("tmp_table_name"))
         client_id: str = cast(
             str, query_params.get("client_id") or utils.shortid()[:10]
@@ -2268,6 +2305,7 @@ class Superset(BaseSupersetView):
             sql=sql,
             schema=schema,
             select_as_cta=select_as_cta,
+            ctas_method=ctas_method,
             start_time=now_as_float(),
             tab_name=tab_name,
             status=status,
