@@ -199,7 +199,7 @@
     "@testing-library/jest-dom": "^5.11.6",
     "@testing-library/react": "^11.2.0",
     "@types/classnames": "^2.2.10",
-    "@types/dom-to-image": "^2.6.0",
+    "@types/dom-to-image": "^2.6.2",
     "@types/enzyme": "^3.10.5",
     "@types/enzyme-adapter-react-16": "^1.0.6",
     "@types/fetch-mock": "^7.3.2",
